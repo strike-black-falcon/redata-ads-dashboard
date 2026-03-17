@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>R.E.DATA｜Google Ads 週次レポート</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root {
+    --bg: #0b0e13;
+    --surface: #13181f;
+    --surface2: #1a2030;
+    --border: rgba(255,255,255,0.07);
+    --accent: #00e5a0;
+    --accent2: #3b7fff;
+    --warn: #ff6b6b;
+    --text: #e8edf5;
+    --muted: #6b7a99;
+    --this-week: #00e5a0;
+    --last-week: #3b7fff;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans JP', sans-serif;
+    font-weight: 300;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── ノイズ背景テクスチャ ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 48px 24px; position: relative; z-index: 1; }
+
+  /* ── ヘッダー ── */
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 48px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(28px, 4vw, 42px);
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin-top: 8px;
+  }
+  .subtitle { color: var(--muted); font-size: 13px; margin-top: 6px; letter-spacing: 0.04em; }
+  .report-date {
+    text-align: right;
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+  }
+
+  /* ── トグル ── */
+  .toggle-wrap {
+    display: flex;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 4px;
+    gap: 4px;
+    margin-bottom: 40px;
+    width: fit-content;
+  }
+  .toggle-btn {
+    padding: 10px 28px;
+    border-radius: 9px;
+    border: none;
+    cursor: pointer;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    transition: all 0.25s ease;
+    background: transparent;
+    color: var(--muted);
+  }
+  .toggle-btn.active-this {
+    background: var(--this-week);
+    color: #000;
+  }
+  .toggle-btn.active-last {
+    background: var(--last-week);
+    color: #fff;
+  }
+  .toggle-btn:not(.active-this):not(.active-last):hover {
+    color: var(--text);
+  }
+
+  /* ── 凡例バッジ ── */
+  .legend {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 32px;
+    align-items: center;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  /* ── KPIカード ── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+  .kpi-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--card-accent, var(--accent));
+    border-radius: 16px 16px 0 0;
+  }
+  .kpi-label {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .kpi-value {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(22px, 3vw, 34px);
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .kpi-diff {
+    margin-top: 10px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .diff-up { color: var(--accent); }
+  .diff-down { color: var(--warn); }
+  .diff-neutral { color: var(--muted); }
+
+  /* ── セクション ── */
+  .section {
+    margin-bottom: 32px;
+  }
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── チャートカード ── */
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+  }
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  .chart-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .chart-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  /* ── 2カラムレイアウト ── */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  /* ── 費用テーブル ── */
+  .cost-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .cost-table th {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    padding: 0 0 14px 0;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .cost-table th:last-child { text-align: right; }
+  .cost-table td {
+    padding: 14px 0;
+    font-size: 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .cost-table tr:last-child td { border-bottom: none; }
+  .cost-table td:last-child { text-align: right; font-family: 'Syne', sans-serif; font-weight: 700; }
+
+  .campaign-type {
+    display: inline-block;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    padding: 3px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+    font-weight: 500;
+  }
+  .type-search { background: rgba(59,127,255,0.15); color: var(--accent2); }
+  .type-pmax { background: rgba(0,229,160,0.12); color: var(--accent); }
+
+  .bar-cell { width: 120px; }
+  .bar-bg {
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.6s ease;
+  }
+
+  /* ── フッター ── */
+  footer {
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+
+  /* ── データ切り替えアニメーション ── */
+  .fade-in {
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 720px) {
+    .kpi-grid { grid-template-columns: 1fr 1fr; }
+    .two-col { grid-template-columns: 1fr; }
+    header { flex-direction: column; gap: 16px; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ヘッダー -->
+  <header>
+    <div>
+      <div class="logo">R.E.DATA｜Google Ads Report</div>
+      <h1>週次<br>パフォーマンス</h1>
+      <p class="subtitle">TRUSTART_R.E.DATE アカウント / Google 広告</p>
+    </div>
+    <div class="report-date">
+      生成日時<br>2026.03.17<br><br>
+      <span style="color:var(--accent)">■</span> 今週: 3/10〜3/16<br>
+      <span style="color:var(--accent2)">■</span> 前週: 3/3〜3/9
+    </div>
+  </header>
+
+  <!-- トグル -->
+  <div class="toggle-wrap">
+    <button class="toggle-btn active-this" onclick="switchWeek('this')">今週 3/10〜16</button>
+    <button class="toggle-btn" onclick="switchWeek('last')">前週 3/3〜9</button>
+  </div>
+
+  <!-- KPIカード -->
+  <div class="kpi-grid">
+    <div class="kpi-card" style="--card-accent: var(--accent)">
+      <div class="kpi-label">CV数（コンバージョン）</div>
+      <div class="kpi-value" id="kpi-cv">24.41</div>
+      <div class="kpi-diff">
+        <span class="diff-down" id="kpi-cv-diff">▼ 0.53 vs 前週</span>
+      </div>
+    </div>
+    <div class="kpi-card" style="--card-accent: var(--accent2)">
+      <div class="kpi-label">広告費用（合計）</div>
+      <div class="kpi-value" id="kpi-cost">¥954,771</div>
+      <div class="kpi-diff">
+        <span class="diff-up" id="kpi-cost-diff">▼ ¥131,352 vs 前週</span>
+      </div>
+    </div>
+    <div class="kpi-card" style="--card-accent: #a855f7">
+      <div class="kpi-label">インプレッション</div>
+      <div class="kpi-value" id="kpi-imp">85,576</div>
+      <div class="kpi-diff">
+        <span class="diff-down" id="kpi-imp-diff">▼ 106,965 vs 前週</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- リード数棒グラフ -->
+  <div class="section">
+    <div class="section-title">CV数（リード数）比較</div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">週別 CV数</div>
+          <div class="chart-sub">全キャンペーン合算</div>
+        </div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--last-week)"></div>前週</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--this-week)"></div>今週</div>
+        </div>
+      </div>
+      <canvas id="cvBarChart" height="90"></canvas>
+    </div>
+  </div>
+
+  <!-- 円グラフ + 費用テーブル -->
+  <div class="two-col">
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">キャンペーン別 費用配分</div>
+          <div class="chart-sub" id="pie-period-label">今週 3/10〜3/16</div>
+        </div>
+      </div>
+      <canvas id="costPieChart" height="200"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">費用明細</div>
+          <div class="chart-sub" id="table-period-label">今週 3/10〜3/16</div>
+        </div>
+      </div>
+      <table class="cost-table">
+        <thead>
+          <tr>
+            <th>キャンペーン</th>
+            <th></th>
+            <th style="text-align:right">費用</th>
+          </tr>
+        </thead>
+        <tbody id="cost-table-body">
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2" style="padding-top:16px; font-size:12px; color:var(--muted)">合計</td>
+            <td style="padding-top:16px; font-family:'Syne',sans-serif; font-weight:800; font-size:18px; text-align:right" id="cost-total">¥954,771</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- フッター -->
+  <footer>
+    <span>R.E.DATA / TRUSTART Co., Ltd.</span>
+    <span>Google Ads｜自動取得レポート by Claude</span>
+  </footer>
+
+</div>
+
+<script>
+// ── データ定義 ──
+const data = {
+  this: {
+    label: '今週 3/10〜3/16',
+    cv: 24.41,
+    cost: 954771,
+    imp: 85576,
+    campaigns: [
+      { name: '指名・指名検索', type: 'search', cost: 62100 },
+      { name: '競合キーワード',  type: 'search', cost: 132000 },
+      { name: '一般 R.E.DATA',   type: 'search', cost: 31300 },
+      { name: 'P-MAX R.E.DATA',  type: 'pmax',   cost: 728000 },
+    ]
+  },
+  last: {
+    label: '前週 3/3〜3/9',
+    cv: 24.94,
+    cost: 1086123,
+    imp: 192541,
+    campaigns: [
+      { name: '指名・指名検索', type: 'search', cost: 58100 },
+      { name: '競合キーワード',  type: 'search', cost: 0 },
+      { name: '一般 R.E.DATA',   type: 'search', cost: 44300 },
+      { name: 'P-MAX R.E.DATA',  type: 'pmax',   cost: 983000 },
+    ]
+  }
+};
+
+const COLORS = ['#3b7fff','#00e5a0','#a855f7','#f97316'];
+
+// ── 棒グラフ ──
+const barCtx = document.getElementById('cvBarChart').getContext('2d');
+const barChart = new Chart(barCtx, {
+  type: 'bar',
+  data: {
+    labels: ['前週 3/3〜3/9', '今週 3/10〜3/16'],
+    datasets: [{
+      data: [data.last.cv, data.this.cv],
+      backgroundColor: ['rgba(59,127,255,0.7)', 'rgba(0,229,160,0.7)'],
+      borderColor: ['#3b7fff', '#00e5a0'],
+      borderWidth: 2,
+      borderRadius: 8,
+      borderSkipped: false,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#1a2030',
+        borderColor: 'rgba(255,255,255,0.1)',
+        borderWidth: 1,
+        titleColor: '#6b7a99',
+        bodyColor: '#e8edf5',
+        bodyFont: { family: 'Syne', weight: '700', size: 16 },
+        callbacks: { label: ctx => ' CV: ' + ctx.parsed.y.toFixed(2) }
+      }
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        border: { display: false },
+        ticks: { color: '#6b7a99', font: { family: 'Noto Sans JP', size: 12 } }
+      },
+      y: {
+        grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false },
+        border: { display: false, dash: [4,4] },
+        ticks: { color: '#6b7a99', font: { size: 11 } },
+        min: 22, max: 28,
+      }
+    }
+  }
+});
+
+// ── 円グラフ ──
+const pieCtx = document.getElementById('costPieChart').getContext('2d');
+const pieChart = new Chart(pieCtx, {
+  type: 'doughnut',
+  data: {
+    labels: data.this.campaigns.map(c => c.name),
+    datasets: [{
+      data: data.this.campaigns.map(c => c.cost),
+      backgroundColor: COLORS.map(c => c + 'cc'),
+      borderColor: COLORS,
+      borderWidth: 2,
+      hoverOffset: 8
+    }]
+  },
+  options: {
+    responsive: true,
+    cutout: '68%',
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: {
+          color: '#6b7a99',
+          font: { family: 'Noto Sans JP', size: 11 },
+          padding: 16,
+          usePointStyle: true,
+          pointStyleWidth: 8
+        }
+      },
+      tooltip: {
+        backgroundColor: '#1a2030',
+        borderColor: 'rgba(255,255,255,0.1)',
+        borderWidth: 1,
+        titleColor: '#6b7a99',
+        bodyColor: '#e8edf5',
+        callbacks: {
+          label: ctx => ' ¥' + ctx.parsed.toLocaleString()
+        }
+      }
+    }
+  }
+});
+
+// ── テーブル描画 ──
+function renderTable(week) {
+  const d = data[week];
+  const maxCost = Math.max(...d.campaigns.map(c => c.cost));
+  const tbody = document.getElementById('cost-table-body');
+  tbody.innerHTML = d.campaigns.map((c, i) => `
+    <tr>
+      <td>
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${COLORS[i]};margin-right:8px;vertical-align:middle"></span>
+        ${c.name}
+        <span class="campaign-type type-${c.type}">${c.type === 'pmax' ? 'P-MAX' : '検索'}</span>
+      </td>
+      <td class="bar-cell">
+        <div class="bar-bg">
+          <div class="bar-fill" style="width:${maxCost > 0 ? (c.cost/maxCost*100) : 0}%;background:${COLORS[i]}"></div>
+        </div>
+      </td>
+      <td>¥${c.cost.toLocaleString()}</td>
+    </tr>
+  `).join('');
+  document.getElementById('cost-total').textContent = '¥' + d.cost.toLocaleString();
+}
+
+// ── KPI更新 ──
+function updateKPI(week) {
+  const d = data[week];
+  const other = week === 'this' ? data.last : data.this;
+  const label = week === 'this' ? 'vs 前週' : 'vs 今週';
+
+  document.getElementById('kpi-cv').textContent = d.cv.toFixed(2);
+  document.getElementById('kpi-cost').textContent = '¥' + d.cost.toLocaleString();
+  document.getElementById('kpi-imp').textContent = d.imp.toLocaleString();
+
+  const cvDiff = d.cv - other.cv;
+  const costDiff = d.cost - other.cost;
+  const impDiff = d.imp - other.imp;
+
+  const cvEl = document.getElementById('kpi-cv-diff');
+  cvEl.textContent = (cvDiff >= 0 ? '▲ ' : '▼ ') + Math.abs(cvDiff).toFixed(2) + ' ' + label;
+  cvEl.className = cvDiff >= 0 ? 'diff-up' : 'diff-down';
+
+  const costEl = document.getElementById('kpi-cost-diff');
+  costEl.textContent = (costDiff >= 0 ? '▲ ' : '▼ ') + '¥' + Math.abs(costDiff).toLocaleString() + ' ' + label;
+  costEl.className = costDiff >= 0 ? 'diff-down' : 'diff-up'; // 費用は下がると良い
+
+  const impEl = document.getElementById('kpi-imp-diff');
+  impEl.textContent = (impDiff >= 0 ? '▲ ' : '▼ ') + Math.abs(impDiff).toLocaleString() + ' ' + label;
+  impEl.className = impDiff >= 0 ? 'diff-up' : 'diff-down';
+}
+
+// ── 週切り替え ──
+function switchWeek(week) {
+  const d = data[week];
+
+  // ボタン状態
+  document.querySelectorAll('.toggle-btn').forEach(btn => {
+    btn.classList.remove('active-this', 'active-last');
+  });
+  event.target.classList.add(week === 'this' ? 'active-this' : 'active-last');
+
+  // ラベル更新
+  document.getElementById('pie-period-label').textContent = d.label;
+  document.getElementById('table-period-label').textContent = d.label;
+
+  // 円グラフ更新
+  pieChart.data.datasets[0].data = d.campaigns.map(c => c.cost);
+  pieChart.update();
+
+  // テーブル更新
+  renderTable(week);
+  updateKPI(week);
+
+  // フェードイン
+  document.querySelector('.kpi-grid').classList.remove('fade-in');
+  void document.querySelector('.kpi-grid').offsetWidth;
+  document.querySelector('.kpi-grid').classList.add('fade-in');
+}
+
+// ── 初期化 ──
+renderTable('this');
+updateKPI('this');
+</script>
+</body>
+</html>
