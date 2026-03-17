@@ -516,7 +516,7 @@ function updateCharts(week) {
     ? ['rgba(23,70,162,.95)','rgba(0,135,90,.9)']
     : ['rgba(23,70,162,.9)','rgba(0,135,90,.25)'];
   cvBarChart.update();
- !costBarChart.data.datasets[0].data = d.campaigns.map(c=>c.cost);
+  costBarChart.data.datasets[0].data = d.campaigns.map(c=>c.cost);
   costBarChart.update();
 }
 
